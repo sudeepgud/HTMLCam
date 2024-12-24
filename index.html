@@ -3,99 +3,132 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Camera Viewer</title>
+    <title>Camera Fullscreen</title>
     <style>
-        body, html {
+        #camera-container {
+            position: relative;
+            width: 100%;
             height: 100%;
-            margin: 0;
             display: flex;
             justify-content: center;
             align-items: center;
-            flex-direction: column;
-            background-color: #000;
+            background-color: black;
         }
+
         video {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
+            max-width: 100%;
+            max-height: 100%;
         }
-        select {
-            margin-bottom: 10px;
-            padding: 10px;
+
+        button {
+            position: absolute;
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 10px 20px;
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background-color: rgba(0, 0, 0, 0.9);
+        }
+
+        #camera-select {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            padding: 5px;
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            border: none;
             font-size: 16px;
         }
     </style>
 </head>
 <body>
-
-    <h1 style="color: white;">Choose Camera</h1>
-    <select id="cameraSelect" disabled></select>
-    <video id="video" autoplay playsinline></video>
+    <div id="camera-container">
+        <video id="camera-view" autoplay></video>
+        <button id="fullscreen-btn">Go Fullscreen</button>
+        <select id="camera-select"></select>
+    </div>
 
     <script>
-        const cameraSelect = document.getElementById('cameraSelect');
-        const video = document.getElementById('video');
-        let currentStream;
-        let videoDevices = [];
+        const cameraView = document.getElementById('camera-view');
+        const fullscreenBtn = document.getElementById('fullscreen-btn');
+        const cameraSelect = document.getElementById('camera-select');
 
-        // Function to get available camera devices
-        async function getDevices() {
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-                const devices = await navigator.mediaDevices.enumerateDevices();
-                videoDevices = devices.filter(device => device.kind === 'videoinput');
-                console.log(devices);
-                // Stop the stream after getting devices to release the camera
-                stream.getTracks().forEach(track => track.stop());
+        let currentStream = null;
 
-                if (videoDevices.length > 0) {
-                    videoDevices.forEach((device, index) => {
-                        const option = document.createElement('option');
-                        option.value = device.deviceId || index; // Handle cases with no deviceId
-                        option.textContent = device.label || `Camera ${index + 1}`;
-                        cameraSelect.appendChild(option);
-                    });
-
-                    cameraSelect.disabled = false;
-                    cameraSelect.value = videoDevices[0].deviceId || videoDevices[0].deviceId || 0; // Default to the first camera
-                    startVideo(videoDevices[0].deviceId || videoDevices[0].deviceId); // Start the first available camera
-                } else {
-                    alert('No video input devices found.');
-                }
-            } catch (error) {
-                console.error('Error accessing media devices:', error);
-                alert('Permission denied or no devices found.');
-            }
-        }
-
-        // Function to start the video stream from the selected camera
+        // Function to start the video stream
         async function startVideo(deviceId) {
-            // Stop the previous stream if it's still active
             if (currentStream) {
-                const tracks = currentStream.getTracks();
-                tracks.forEach(track => track.stop());
+                currentStream.getTracks().forEach(track => track.stop());
             }
 
             const constraints = {
-                video: { deviceId: { exact: deviceId } }
+                video: {
+                    deviceId: deviceId ? { exact: deviceId } : undefined,
+                    facingMode: 'user',
+                }
             };
 
             try {
-                const stream = await navigator.mediaDevices.getUserMedia(constraints);
-                currentStream = stream;
-                video.srcObject = stream;
-            } catch (error) {
-                console.error('Error starting video:', error);
-                alert('Failed to start video. Please try another camera.');
+                currentStream = await navigator.mediaDevices.getUserMedia(constraints);
+                cameraView.srcObject = currentStream;
+            } catch (err) {
+                console.error('Error starting video: ', err);
             }
         }
 
-        // Event listener for when the user selects a camera
-        cameraSelect.addEventListener('change', (event) => {
-            startVideo(event.target.value);
-        });
+        // Function to get camera devices
+        async function getDevices() {
+            try {
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                const videoDevices = devices.filter(device => device.kind === 'videoinput');
+                
+                if (videoDevices.length === 0) {
+                    alert('No camera devices found.');
+                    return;
+                }
 
-        // Get the devices when the page loads
+                videoDevices.forEach(device => {
+                    const option = document.createElement('option');
+                    option.value = device.deviceId;
+                    option.text = device.label || `Camera ${cameraSelect.length + 1}`;
+                    cameraSelect.appendChild(option);
+                });
+
+                // Start the first camera by default
+                if (videoDevices.length > 0) {
+                    startVideo(videoDevices[0].deviceId);
+                }
+
+                cameraSelect.addEventListener('change', () => {
+                    startVideo(cameraSelect.value);
+                });
+            } catch (err) {
+                console.error('Error getting devices: ', err);
+            }
+        }
+
+        // Function to toggle fullscreen
+        function toggleFullscreen() {
+            if (!document.fullscreenElement) {
+                cameraView.requestFullscreen().catch(err => console.error(`Error attempting to enable fullscreen mode: ${err.message}`));
+                fullscreenBtn.innerText = 'Exit Fullscreen';
+            } else {
+                document.exitFullscreen();
+                fullscreenBtn.innerText = 'Go Fullscreen';
+            }
+        }
+
+        // Event listener for fullscreen button
+        fullscreenBtn.addEventListener('click', toggleFullscreen);
+
+        // Initialize device list
         getDevices();
     </script>
 </body>
